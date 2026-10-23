@@ -1,0 +1,262 @@
+/* === SONIX DESIGN SYSTEM === */
+:root {
+  /* Default Theme: Cyber Neon */
+  --bg-primary: #070913;
+  --bg-secondary: #0e1222;
+  --bg-card: rgba(18, 24, 46, 0.7);
+  --bg-card-hover: rgba(26, 34, 64, 0.85);
+  --bg-glass: rgba(14, 18, 34, 0.65);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(139, 92, 246, 0.35);
+  
+  --accent-primary: #8b5cf6;
+  --accent-secondary: #06b6d4;
+  --accent-tertiary: #ec4899;
+  --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
+  --accent-glow: 0 0 25px rgba(139, 92, 246, 0.35);
+
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --header-height: 72px;
+  --player-height: 84px;
+  --sidebar-width: 250px;
+}
+
+/* Theme: Tokyo Midnight Lo-Fi */
+[data-theme="tokyo-midnight"] {
+  --bg-primary: #0d0c15;
+  --bg-secondary: #171524;
+  --bg-card: rgba(28, 25, 43, 0.75);
+  --bg-card-hover: rgba(38, 34, 60, 0.9);
+  --bg-glass: rgba(23, 21, 36, 0.7);
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-hover: rgba(245, 158, 11, 0.4);
+  
+  --accent-primary: #f59e0b;
+  --accent-secondary: #f43f5e;
+  --accent-tertiary: #8b5cf6;
+  --accent-gradient: linear-gradient(135deg, #f59e0b 0%, #f43f5e 100%);
+  --accent-glow: 0 0 25px rgba(245, 158, 11, 0.35);
+
+  --text-main: #fdf6e2;
+  --text-muted: #a8a29e;
+  --text-dim: #78716c;
+}
+
+/* Theme: Obsidian Luxury Emerald */
+[data-theme="obsidian-emerald"] {
+  --bg-primary: #080a0c;
+  --bg-secondary: #0f1317;
+  --bg-card: rgba(18, 23, 28, 0.7);
+  --bg-card-hover: rgba(26, 33, 40, 0.85);
+  --bg-glass: rgba(15, 19, 23, 0.7);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(16, 185, 129, 0.4);
+  
+  --accent-primary: #10b981;
+  --accent-secondary: #38bdf8;
+  --accent-tertiary: #a7f3d0;
+  --accent-gradient: linear-gradient(135deg, #10b981 0%, #065f46 100%);
+  --accent-glow: 0 0 25px rgba(16, 185, 129, 0.35);
+
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-dim: #475569;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  background-image: 
+    radial-gradient(ellipse 60% 40% at 50% -20%, rgba(139, 92, 246, 0.15), transparent 70%),
+    radial-gradient(ellipse 40% 30% at 90% 80%, rgba(6, 182, 212, 0.08), transparent 70%);
+  background-attachment: fixed;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
+/* Glassmorphism helpers */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel:hover {
+  border-color: var(--border-hover);
+}
+
+/* Button & interactive components */
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  outline: none;
+}
+
+.btn-primary {
+  background: var(--accent-gradient);
+  color: #ffffff;
+  padding: 10px 20px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--accent-glow);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
+  padding: 9px 18px;
+  border-radius: var(--radius-full);
+  font-weight: 500;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-purple {
+  background: rgba(139, 92, 246, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.badge-cyan {
+  background: rgba(6, 182, 212, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.badge-amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-green {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Audio Waveform visualization bars */
+.waveform-container {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 40px;
+}
+
+.waveform-bar {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  min-height: 4px;
+  transition: height 0.1s ease, background 0.2s ease;
+}
+
+.waveform-bar.active {
+  background: var(--accent-gradient);
+  box-shadow: 0 0 8px var(--accent-primary);
+}
+
+.waveform-bar.playing {
+  animation: pulse-wave 0.8s infinite alternate ease-in-out;
+}
+
+@keyframes pulse-wave {
+  0% { transform: scaleY(0.3); }
+  100% { transform: scaleY(1); }
+}
+
+/* Shimmer animations */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Micro animations */
+.glow-on-hover {
+  transition: all 0.3s ease;
+}
+.glow-on-hover:hover {
+  filter: drop-shadow(0 0 12px var(--accent-primary));
+}
