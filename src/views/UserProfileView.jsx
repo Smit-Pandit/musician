@@ -49,10 +49,11 @@ export default function UserProfileView() {
   const userPlaylists = playlists.filter(p => p.user_id === currentUser.user_id);
   const userHistory = listeningHistory.filter(h => h.user_id === currentUser.user_id);
 
-  const handleCreatePlaylist = () => {
+  const handleCreatePlaylist = async () => {
     const title = prompt('Enter playlist name:');
     if (title && title.trim()) {
-      createPlaylist(title.trim(), 'Created by ' + currentUser.username);
+      const id = await createPlaylist(title.trim(), 'Created by ' + currentUser.username);
+      navigateToPlaylist(id);
     }
   };
 
@@ -326,16 +327,21 @@ export default function UserProfileView() {
                   onClick={() => navigateToPlaylist(pl.playlist_id)}
                 >
                   <div className="playlist-art-box">
-                    <img src={pl.cover_art_url} alt={pl.title} className="playlist-art" />
+                    <img
+                      src={pl.cover_art_url || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500'}
+                      alt={pl.title}
+                      className="playlist-art"
+                      onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500'; }}
+                    />
                     <span className={`playlist-visibility-tag ${pl.is_public ? 'tag-public' : 'tag-private'}`}>
                       {pl.is_public ? 'PUBLIC' : 'PRIVATE'}
                     </span>
                   </div>
                   <div className="playlist-info">
                     <h3 className="playlist-card-title">{pl.title}</h3>
-                    <p className="playlist-card-desc">{pl.description}</p>
+                    <p className="playlist-card-desc">{pl.description || 'Custom Musicians playlist'}</p>
                     <div className="playlist-footer-meta">
-                      <span>{full?.tracks?.length || 0} tracks</span>
+                      <span>{pl.track_count !== undefined ? pl.track_count : (playlistTracks.filter(pt => pt.playlist_id === pl.playlist_id).length)} tracks</span>
                       <span>•</span>
                       <span>Created {new Date(pl.created_at).toLocaleDateString()}</span>
                     </div>

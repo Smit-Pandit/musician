@@ -4,10 +4,11 @@ import { useApp } from '../context/AppContext';
 import { USERS } from '../data/musicData';
 
 export default function LeaderboardView() {
-  const { currentUser, switchUser } = useApp();
+  const { currentUser, switchUser, usersList } = useApp();
 
-  // Sort users by total XP descending
-  const sortedUsers = [...USERS].sort((a, b) => b.total_xp - a.total_xp);
+  // Sort users dynamically from MySQL usersList
+  const activeUsers = (usersList && usersList.length > 0) ? usersList : USERS;
+  const sortedUsers = [...activeUsers].sort((a, b) => (b.total_xp || 0) - (a.total_xp || 0));
 
   return (
     <div className="leaderboard-view">
@@ -19,7 +20,7 @@ export default function LeaderboardView() {
         <div>
           <h1 className="header-title">Global Audio Grandmasters</h1>
           <p className="header-sub">
-            Rankings derived dynamically from <code>USERS.total_xp</code>, Heardle win streaks, and session accuracy
+            Rankings synchronized live from MySQL <code>users.total_xp</code>, Heardle win streaks, and session accuracy
           </p>
         </div>
       </div>
@@ -32,8 +33,8 @@ export default function LeaderboardView() {
             <div className="podium-medal silver">2</div>
             <img src={sortedUsers[1].avatar_url} alt={sortedUsers[1].username} className="podium-avatar" />
             <h3 className="podium-name">@{sortedUsers[1].username}</h3>
-            <span className="podium-xp font-mono">{sortedUsers[1].total_xp.toLocaleString()} XP</span>
-            <span className="badge badge-purple">{sortedUsers[1].rank_title}</span>
+            <span className="podium-xp font-mono">{(sortedUsers[1].total_xp || 0).toLocaleString()} XP</span>
+            <span className="badge badge-purple">{sortedUsers[1].rank_title || 'Diamond Synthesizer'}</span>
           </div>
         )}
 
@@ -46,8 +47,8 @@ export default function LeaderboardView() {
             <div className="podium-medal gold">1</div>
             <img src={sortedUsers[0].avatar_url} alt={sortedUsers[0].username} className="podium-avatar champ-avatar" />
             <h3 className="podium-name">@{sortedUsers[0].username}</h3>
-            <span className="podium-xp champ-xp font-mono">{sortedUsers[0].total_xp.toLocaleString()} XP</span>
-            <span className="badge badge-cyan">{sortedUsers[0].rank_title}</span>
+            <span className="podium-xp champ-xp font-mono">{(sortedUsers[0].total_xp || 0).toLocaleString()} XP</span>
+            <span className="badge badge-cyan">{sortedUsers[0].rank_title || 'Grandmaster Producer'}</span>
           </div>
         )}
 
@@ -57,8 +58,8 @@ export default function LeaderboardView() {
             <div className="podium-medal bronze">3</div>
             <img src={sortedUsers[2].avatar_url} alt={sortedUsers[2].username} className="podium-avatar" />
             <h3 className="podium-name">@{sortedUsers[2].username}</h3>
-            <span className="podium-xp font-mono">{sortedUsers[2].total_xp.toLocaleString()} XP</span>
-            <span className="badge badge-amber">{sortedUsers[2].rank_title}</span>
+            <span className="podium-xp font-mono">{(sortedUsers[2].total_xp || 0).toLocaleString()} XP</span>
+            <span className="badge badge-amber">{sortedUsers[2].rank_title || 'Gold Beatmaker'}</span>
           </div>
         )}
       </div>

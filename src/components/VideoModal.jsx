@@ -1,9 +1,10 @@
-import React from 'react';
-import { X, Tv, ExternalLink, ShieldCheck, Play } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Tv, ExternalLink, ShieldCheck, Play, Code, ListMusic } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export default function VideoModal() {
   const { currentTrack, showVideoModal, setShowVideoModal } = useApp();
+  const [copied, setCopied] = useState(false);
 
   if (!showVideoModal || !currentTrack) return null;
 
@@ -49,14 +50,37 @@ export default function VideoModal() {
                 Snippet Start: {currentTrack.snippet_start_sec != null ? currentTrack.snippet_start_sec : (currentTrack.snippet_start_ms / 1000)}s
               </span>
             </div>
-            <a
-              href={`https://www.youtube.com/watch?v=${currentTrack.yt_video_id || currentTrack.youtube_video_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-secondary"
-            >
-              <ExternalLink size={14} /> Open in YouTube
-            </a>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  const videoId = currentTrack.yt_video_id || currentTrack.youtube_video_id;
+                  const code = `<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/${videoId}" title="${currentTrack.title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+                  navigator.clipboard.writeText(code);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                <Code size={14} /> {copied ? 'Copied <iframe>!' : 'Copy <iframe>'}
+              </button>
+              <a
+                href="/all_song_iframes.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary"
+                title="Browse directory of all 755 song iframes"
+              >
+                <ListMusic size={14} /> All 755 Iframes
+              </a>
+              <a
+                href={`https://www.youtube.com/watch?v=${currentTrack.yt_video_id || currentTrack.youtube_video_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary"
+              >
+                <ExternalLink size={14} /> Open in YouTube
+              </a>
+            </div>
           </div>
         </div>
       </div>

@@ -1,418 +1,493 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Zap,
-  Mail,
+  ArrowLeft,
+  ArrowRight,
   Lock,
-  User,
   Eye,
   EyeOff,
-  ArrowRight,
+  User,
+  Mail,
   Sparkles,
-  Flame,
-  Award,
   CheckCircle2,
-  ArrowLeft,
-  Music,
-  Disc,
-  Database
+  AlertCircle,
+  Radio,
+  Music
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { sqlApi } from '../services/sqlApi';
+import { soundEngine } from '../services/soundEngine';
 import confetti from 'canvas-confetti';
 
 export default function AuthView({ initialMode = 'login' }) {
   const {
     currentPath,
     navigate,
-    setActiveTab,
-    currentUser,
     setCurrentUser,
     usersList,
     setUsersList
   } = useApp();
 
   // Mode: 'login' | 'register'
-  const isRegister = currentPath === '/register' || initialMode === 'register';
+  const [activeTab, setActiveTab] = useState(
+    currentPath === '/register' || initialMode === 'register' ? 'register' : 'login'
+  );
 
-  // Form State
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  useEffect(() => {
+    if (currentPath === '/register') setActiveTab('register');
+    if (currentPath === '/login') setActiveTab('login');
+  }, [currentPath]);
+
+  // Sign In State
+  const [loginIdentifier, setLoginIdentifier] = useState('kai_beats');
+  const [loginPassword, setLoginPassword] = useState('demoPass123!');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+
+  // Register State
+  const [regUsername, setRegUsername] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
   const [selectedGenre, setSelectedGenre] = useState('Synthwave');
-  const [showPassword, setShowPassword] = useState(false);
-  const [statusMessage, setStatusMessage] = useState(null); // { type: 'success' | 'error', text }
 
-  const genres = ['Synthwave', 'Cyberpunk', 'Lo-Fi Chill', 'Indie Rock', 'French House'];
+  // UI state
+  const [statusMessage, setStatusMessage] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeDemoPill, setActiveDemoPill] = useState(null);
 
-  // Handle fast demo fill
+  const starterGenres = ['Synthwave', 'Dark Electro', 'Cyberpunk', 'Lo-Fi Chill'];
+
+  // Switch Tab
+  const handleTabSwitch = (tab) => {
+    try {
+      soundEngine.playEntryChime();
+    } catch {
+      // fallback
+    }
+    setActiveTab(tab);
+    setStatusMessage(null);
+    if (tab === 'login') {
+      window.history.replaceState(null, '', '/login');
+    } else {
+      window.history.replaceState(null, '', '/register');
+    }
+  };
+
+  // Quick Demo Autofill
   const handleDemoFill = (user) => {
-    setUsername(user.username);
-    setEmail(user.email);
-    setPassword('demoPass123!');
+    try {
+      soundEngine.playEntryChime();
+    } catch {
+      // fallback
+    }
+    setLoginIdentifier(user.username);
+    setLoginPassword('demoPass123!');
+    setActiveDemoPill(user.username);
+    setTimeout(() => setActiveDemoPill(null), 800);
+
     setStatusMessage({
       type: 'success',
-      text: `Loaded credentials for @${user.username}`
+      text: `Loaded demo credentials for @${user.username}`
     });
   };
 
-  // Submit Handler (Mock authentication, not connected to database yet)
-  const handleSubmit = (e) => {
+  // Login Submit
+  const handleLoginSubmit = (e) => {
     e.preventDefault();
+    if (!loginIdentifier.trim() || !loginPassword) {
+      setStatusMessage({ type: 'error', text: 'Please enter your username and password.' });
+      return;
+    }
+
+    setIsSubmitting(true);
     setStatusMessage(null);
+    try {
+      soundEngine.playEntryChime();
+    } catch {
+      // fallback
+    }
 
-    if (isRegister) {
-      // Basic validation
-      if (!username.trim() || !email.trim() || !password) {
-        setStatusMessage({ type: 'error', text: 'Please fill out all required fields.' });
-        return;
-      }
-      if (password !== confirmPassword) {
-        setStatusMessage({ type: 'error', text: 'Passwords do not match.' });
-        return;
-      }
+    setTimeout(() => {
+      const matchedUser = sqlApi.auth.login(loginIdentifier.trim(), loginPassword);
+      setCurrentUser(matchedUser);
 
-      // Create new user via SQL (INSERT INTO users ...)
-      const newUser = sqlApi.auth.register(username, email, password);
+      confetti({
+        particleCount: 60,
+        spread: 60,
+        origin: { y: 0.6 },
+        colors: ['#ef4444', '#ff7878', '#991b1b', '#ffffff']
+      });
+
+      setStatusMessage({
+        type: 'success',
+        text: `Welcome back, @${matchedUser.username}! Entering studio...`
+      });
+
+      setTimeout(() => {
+        navigate('/discover');
+      }, 750);
+    }, 400);
+  };
+
+  // Register Submit
+  const handleRegisterSubmit = (e) => {
+    e.preventDefault();
+    if (!regUsername.trim() || !regEmail.trim() || !regPassword) {
+      setStatusMessage({ type: 'error', text: 'All registration fields are required.' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setStatusMessage(null);
+    try {
+      soundEngine.playEntryChime();
+    } catch {
+      // fallback
+    }
+
+    setTimeout(() => {
+      const cleanUsername = regUsername.replace('@', '').trim();
+      const newUser = sqlApi.auth.register(cleanUsername, regEmail.trim(), regPassword);
       newUser.favorite_genre = selectedGenre;
+      newUser.display_name = cleanUsername;
 
       setUsersList(prev => [newUser, ...prev]);
       setCurrentUser(newUser);
 
-      confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+      confetti({
+        particleCount: 90,
+        spread: 75,
+        origin: { y: 0.55 },
+        colors: ['#ef4444', '#ff7878', '#fbbf24', '#ffffff']
+      });
+
       setStatusMessage({
         type: 'success',
-        text: `Welcome aboard, @${newUser.username}! +250 Starter XP awarded.`
+        text: `Welcome @${cleanUsername}! +250 Starter XP unlocked.`
       });
 
       setTimeout(() => {
-        navigate('/');
-        setActiveTab('profile');
-      }, 1200);
-    } else {
-      // Login via SQL (SELECT * FROM users WHERE ...)
-      if (!username.trim() && !email.trim()) {
-        setStatusMessage({ type: 'error', text: 'Please enter your username or email.' });
-        return;
-      }
-
-      const matchedUser = sqlApi.auth.login(username.trim() || email.trim(), password);
-
-      setCurrentUser(matchedUser);
-
-      confetti({ particleCount: 50, spread: 50, origin: { y: 0.6 } });
-      setStatusMessage({
-        type: 'success',
-        text: `Signed in successfully as @${matchedUser.username}! Redirecting...`
-      });
-
-      setTimeout(() => {
-        navigate('/');
-        setActiveTab('profile');
-      }, 1000);
-    }
+        navigate('/discover');
+      }, 850);
+    }, 450);
   };
 
   return (
-    <div className="auth-page-wrapper">
-      {/* Top back navigation button */}
-      <div className="auth-top-bar">
-        <button
-          className="btn-back-arena"
-          onClick={() => {
-            navigate('/');
-            setActiveTab('game');
-          }}
-        >
-          <ArrowLeft size={16} />
-          <span>Back to Audio Arena</span>
-        </button>
-
-        <div className="auth-erd-tag">
-          <Database size={14} />
-          <span>USERS Table Auth Simulation</span>
-        </div>
+    <div className="auth-clean-wrapper">
+      {/* Subtle Atmospheric Ruby Glows & Micro Grid */}
+      <div className="auth-clean-bg">
+        <div className="clean-ruby-flare" />
+        <div className="clean-micro-grid" />
       </div>
 
-      <div className="auth-card-container glass-panel">
-        {/* Left Side: Brand Visual & Features Showcase */}
-        <div className="auth-left-showcase">
-          <div className="auth-brand-header">
-            <div className="brand-icon-box">
-              <Zap size={24} className="brand-icon" />
-            </div>
-            <div>
-              <span className="auth-brand-title">SONIX</span>
-              <span className="auth-brand-sub">MUSIC GUESSING &amp; STREAMING</span>
-            </div>
-          </div>
+      {/* Top Navigation Strip */}
+      <header className="auth-clean-nav">
+        <button
+          type="button"
+          className="clean-back-btn font-mono"
+          onClick={() => navigate('/')}
+        >
+          <ArrowLeft size={15} />
+          <span>RETURN TO HOME</span>
+        </button>
 
-          <div className="auth-feature-list">
-            <div className="auth-feature-item">
-              <div className="auth-feat-icon">
-                <Music size={18} />
-              </div>
-              <div>
-                <h4 className="auth-feat-title">4-Tier Audio Snippets</h4>
-                <p className="auth-feat-desc">
-                  Identify mystery tracks from 0.5s to 5.0s audio hooks with live synthesized waveforms.
-                </p>
-              </div>
-            </div>
-
-            <div className="auth-feature-item">
-              <div className="auth-feat-icon">
-                <Flame size={18} />
-              </div>
-              <div>
-                <h4 className="auth-feat-title">Daily Streaks &amp; Derived XP</h4>
-                <p className="auth-feat-desc">
-                  Climb the global leaderboard with continuous game sessions and speed bonuses.
-                </p>
-              </div>
-            </div>
-
-            <div className="auth-feature-item">
-              <div className="auth-feat-icon">
-                <Disc size={18} />
-              </div>
-              <div>
-                <h4 className="auth-feat-title">Custom Playlists &amp; Remix Lineage</h4>
-                <p className="auth-feat-desc">
-                  Curate public/private mixtapes and explore parent track remix genealogy.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Equalizer animation banner */}
-          <div className="auth-eq-box">
-            <span className="eq-label">SYNTH ENGINE READY</span>
-            <div className="waveform-container auth-eq-bars">
-              {[0.4, 0.8, 0.3, 0.9, 0.6, 0.95, 0.5, 0.85, 0.7, 0.4, 0.88, 0.65].map(
-                (h, idx) => (
-                  <div
-                    key={idx}
-                    className="waveform-bar active playing"
-                    style={{
-                      height: `${h * 28}px`,
-                      animationDelay: `${idx * 0.08}s`
-                    }}
-                  ></div>
-                )
-              )}
-            </div>
-          </div>
+        <div className="clean-telemetry-tag font-mono">
+          <span className="clean-red-pip" />
+          <span>MUSICIANS // SECURE ACCESS</span>
         </div>
+      </header>
 
-        {/* Right Side: Auth Form (Sign In / Register) */}
-        <div className="auth-right-form-pane">
-          {/* Mode Switcher Tabs */}
-          <div className="auth-tabs-toggle">
+      {/* Main Centered Luxury Card */}
+      <main className="auth-clean-stage">
+        <div className="auth-minimal-card">
+          {/* Subtle Sleek Reticle Corners */}
+          <div className="corner-bracket br-tl" />
+          <div className="corner-bracket br-tr" />
+          <div className="corner-bracket br-bl" />
+          <div className="corner-bracket br-br" />
+
+          {/* Brand Header */}
+          <div className="minimal-card-header">
+            <div className="minimal-brand-icon">
+              <Radio size={18} className="text-crimson" />
+            </div>
+            <h1 className="minimal-brand-title font-syne">MUSICIANS</h1>
+            <p className="minimal-brand-sub">
+              {activeTab === 'login'
+                ? 'Sign in to access high-fidelity streams & guessing arena'
+                : 'Create your artist profile & claim +250 Starter XP'}
+            </p>
+          </div>
+
+          {/* Clean Segmented Tab Switcher */}
+          <div className="clean-tab-slider font-mono">
             <button
-              className={`auth-tab-btn ${!isRegister ? 'active' : ''}`}
-              onClick={() => {
-                navigate('/login');
-                setStatusMessage(null);
-              }}
+              type="button"
+              className={`clean-tab-option ${activeTab === 'login' ? 'active' : ''}`}
+              onClick={() => handleTabSwitch('login')}
             >
               Sign In
             </button>
             <button
-              className={`auth-tab-btn ${isRegister ? 'active' : ''}`}
-              onClick={() => {
-                navigate('/register');
-                setStatusMessage(null);
-              }}
+              type="button"
+              className={`clean-tab-option ${activeTab === 'register' ? 'active' : ''}`}
+              onClick={() => handleTabSwitch('register')}
             >
               Create Account
             </button>
           </div>
 
-          <div className="auth-header-text">
-            <h2 className="auth-heading">
-              {isRegister ? 'Create Your Sonic Profile' : 'Welcome Back to Sonix'}
-            </h2>
-            <p className="auth-subheading">
-              {isRegister
-                ? 'Join players worldwide and test your audio recognition speed.'
-                : 'Enter your credentials or pick a demo user to explore.'}
-            </p>
-          </div>
-
-          {/* Quick Demo Fill Pills */}
-          <div className="demo-fill-strip">
-            <span className="demo-strip-label">Quick Fill Demo:</span>
-            <div className="demo-pills">
-              {usersList.slice(0, 3).map(u => (
-                <button
-                  key={u.user_id}
-                  type="button"
-                  className="demo-pill-btn"
-                  onClick={() => handleDemoFill(u)}
-                >
-                  <img src={u.avatar_url} alt={u.username} className="demo-thumb" />
-                  <span>@{u.username}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Status Toast */}
           {statusMessage && (
-            <div className={`auth-status-toast status-${statusMessage.type}`}>
+            <div className={`clean-toast toast-${statusMessage.type} font-mono`}>
               {statusMessage.type === 'success' ? (
-                <CheckCircle2 size={16} />
+                <CheckCircle2 size={15} className="toast-icon" />
               ) : (
-                <Sparkles size={16} />
+                <AlertCircle size={15} className="toast-icon" />
               )}
               <span>{statusMessage.text}</span>
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="auth-form-fields">
-            {/* Username Field */}
-            <div className="form-group">
-              <label className="field-label">Username</label>
-              <div className="field-input-box">
-                <User size={16} className="field-icon" />
-                <input
-                  type="text"
-                  placeholder="e.g. Alex_Synthwave"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="auth-input font-mono"
-                  required
-                />
+          {/* SIGN IN VIEW */}
+          {activeTab === 'login' ? (
+            <form onSubmit={handleLoginSubmit} className="clean-form">
+              {/* Quick Demo Fill Pills */}
+              <div className="clean-demo-row">
+                <span className="clean-demo-label font-mono">Quick demo:</span>
+                <div className="clean-demo-pills">
+                  {usersList.slice(0, 3).map(u => (
+                    <button
+                      key={u.user_id}
+                      type="button"
+                      className={`clean-demo-pill font-mono ${activeDemoPill === u.username ? 'active' : ''}`}
+                      onClick={() => handleDemoFill(u)}
+                    >
+                      <img src={u.avatar_url} alt={u.username} className="demo-avatar-mini" />
+                      <span>@{u.username}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Email Field (Required for Register, optional in login if username provided) */}
-            {isRegister && (
-              <div className="form-group">
-                <label className="field-label">Email Address</label>
-                <div className="field-input-box">
-                  <Mail size={16} className="field-icon" />
+              {/* Username/Email Input */}
+              <div className="clean-field-group">
+                <label className="clean-label font-mono" htmlFor="login-ident">
+                  USERNAME OR EMAIL
+                </label>
+                <div className="clean-input-box">
+                  <User size={15} className="clean-field-icon" />
                   <input
-                    type="email"
-                    placeholder="user@sonix.fm"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="auth-input font-mono"
+                    id="login-ident"
+                    type="text"
+                    className="clean-input font-mono"
+                    placeholder="e.g. kai_beats"
+                    value={loginIdentifier}
+                    onChange={(e) => setLoginIdentifier(e.target.value)}
                     required
+                    disabled={isSubmitting}
                   />
                 </div>
               </div>
-            )}
 
-            {/* Password Field */}
-            <div className="form-group">
-              <div className="password-label-row">
-                <label className="field-label">Password</label>
-                {!isRegister && (
-                  <span className="forgot-pass-link" onClick={() => alert('Demo mode: Click any Quick Fill Demo user above!')}>
+              {/* Password Input */}
+              <div className="clean-field-group">
+                <div className="clean-label-row font-mono">
+                  <label className="clean-label" htmlFor="login-pwd">
+                    PASSWORD
+                  </label>
+                  <button
+                    type="button"
+                    className="clean-forgot-btn"
+                    onClick={() => {
+                      alert('Demo Mode: Click any "Quick demo" pill above to autofill valid credentials instantly!');
+                    }}
+                  >
                     Forgot password?
-                  </span>
-                )}
-              </div>
-              <div className="field-input-box">
-                <Lock size={16} className="field-icon" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="auth-input font-mono"
-                  required
-                />
-                <button
-                  type="button"
-                  className="btn-toggle-eye"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Confirm Password (Register Only) */}
-            {isRegister && (
-              <div className="form-group">
-                <label className="field-label">Confirm Password</label>
-                <div className="field-input-box">
-                  <Lock size={16} className="field-icon" />
+                  </button>
+                </div>
+                <div className="clean-input-box">
+                  <Lock size={15} className="clean-field-icon" />
                   <input
-                    type={showPassword ? 'text' : 'password'}
+                    id="login-pwd"
+                    type={showLoginPassword ? 'text' : 'password'}
+                    className="clean-input font-mono"
                     placeholder="••••••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="auth-input font-mono"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
                     required
+                    disabled={isSubmitting}
+                  />
+                  <button
+                    type="button"
+                    className="clean-eye-btn"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    tabIndex={-1}
+                  >
+                    {showLoginPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="clean-submit-btn font-mono"
+              >
+                <span>SIGN IN TO MUSICIANS</span>
+                <ArrowRight size={15} />
+              </button>
+            </form>
+          ) : (
+            /* REGISTER VIEW (SAME SLEEK AESTHETIC) */
+            <form onSubmit={handleRegisterSubmit} className="clean-form">
+              {/* Username */}
+              <div className="clean-field-group">
+                <label className="clean-label font-mono" htmlFor="reg-user">
+                  ARTIST HANDLE
+                </label>
+                <div className="clean-input-box">
+                  <User size={15} className="clean-field-icon" />
+                  <input
+                    id="reg-user"
+                    type="text"
+                    className="clean-input font-mono"
+                    placeholder="e.g. nova_sound"
+                    value={regUsername}
+                    onChange={(e) => setRegUsername(e.target.value)}
+                    required
+                    disabled={isSubmitting}
                   />
                 </div>
               </div>
-            )}
 
-            {/* Starter Favorite Genre (Register Only) */}
-            {isRegister && (
-              <div className="form-group">
-                <label className="field-label">Preferred Starter Genre</label>
-                <div className="genre-pill-selector">
-                  {genres.map(g => (
+              {/* Email */}
+              <div className="clean-field-group">
+                <label className="clean-label font-mono" htmlFor="reg-email">
+                  EMAIL ADDRESS
+                </label>
+                <div className="clean-input-box">
+                  <Mail size={15} className="clean-field-icon" />
+                  <input
+                    id="reg-email"
+                    type="email"
+                    className="clean-input font-mono"
+                    placeholder="artist@musicians.io"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    required
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div className="clean-field-group">
+                <label className="clean-label font-mono" htmlFor="reg-pwd">
+                  MASTER KEY (PASSWORD)
+                </label>
+                <div className="clean-input-box">
+                  <Lock size={15} className="clean-field-icon" />
+                  <input
+                    id="reg-pwd"
+                    type={showRegPassword ? 'text' : 'password'}
+                    className="clean-input font-mono"
+                    placeholder="Min. 8 characters"
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    required
+                    disabled={isSubmitting}
+                  />
+                  <button
+                    type="button"
+                    className="clean-eye-btn"
+                    onClick={() => setShowRegPassword(!showRegPassword)}
+                    tabIndex={-1}
+                  >
+                    {showRegPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Starter Genre Selection */}
+              <div className="clean-field-group">
+                <label className="clean-label font-mono">STARTER GENRE</label>
+                <div className="clean-genre-pills font-mono">
+                  {starterGenres.map(g => (
                     <button
                       key={g}
                       type="button"
-                      className={`genre-select-pill ${selectedGenre === g ? 'active' : ''}`}
-                      onClick={() => setSelectedGenre(g)}
+                      className={`clean-genre-pill ${selectedGenre === g ? 'active' : ''}`}
+                      onClick={() => {
+                        try {
+                          soundEngine.playEntryChime();
+                        } catch {
+                          // fallback
+                        }
+                        setSelectedGenre(g);
+                      }}
                     >
                       {g}
                     </button>
                   ))}
                 </div>
               </div>
-            )}
 
-            {/* Submit CTA */}
-            <button type="submit" className="btn-auth-submit btn-primary">
-              <span>{isRegister ? 'Complete Registration & Claim 250 XP' : 'Sign In to Arena'}</span>
-              <ArrowRight size={16} />
-            </button>
-          </form>
+              {/* Reward Badge */}
+              <div className="clean-reward-badge font-mono">
+                <Sparkles size={14} className="text-crimson" />
+                <span>+250 Starter XP awarded instantly</span>
+              </div>
 
-          {/* Footer Toggle text */}
-          <div className="auth-pane-footer">
-            {isRegister ? (
-              <p className="auth-footer-text">
-                Already have an account?{' '}
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="clean-submit-btn font-mono"
+              >
+                <span>CREATE ARTIST PROFILE</span>
+                <ArrowRight size={15} />
+              </button>
+            </form>
+          )}
+
+          {/* Footer Switch Prompt */}
+          <div className="minimal-card-footer font-mono">
+            {activeTab === 'login' ? (
+              <p className="clean-switch-text">
+                Need an account?{' '}
                 <button
                   type="button"
-                  className="auth-link-btn"
-                  onClick={() => {
-                    navigate('/login');
-                    setStatusMessage(null);
-                  }}
+                  className="clean-switch-btn"
+                  onClick={() => handleTabSwitch('register')}
                 >
-                  Sign In
+                  Create Account (+250 XP)
                 </button>
               </p>
             ) : (
-              <p className="auth-footer-text">
-                Don't have an account yet?{' '}
+              <p className="clean-switch-text">
+                Already registered?{' '}
                 <button
                   type="button"
-                  className="auth-link-btn"
-                  onClick={() => {
-                    navigate('/register');
-                    setStatusMessage(null);
-                  }}
+                  className="clean-switch-btn"
+                  onClick={() => handleTabSwitch('login')}
                 >
-                  Create Account (+250 XP)
+                  Sign In
                 </button>
               </p>
             )}
           </div>
         </div>
-      </div>
+      </main>
+
+      {/* Minimal Bottom Micro-Telemetry Footer */}
+      <footer className="auth-clean-footer font-mono">
+        <span>AES-256 ENCRYPTED</span>
+        <span className="dot-divider">•</span>
+        <span>LOSSLESS FLAC ENGINE</span>
+        <span className="dot-divider">•</span>
+        <span>MUSICIANS LAB</span>
+      </footer>
     </div>
   );
 }

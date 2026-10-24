@@ -1,23 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Compass,
   Play,
   Pause,
   Heart,
-  Plus,
   Tv,
-  ListFilter,
-  Grid,
-  List,
-  Flame,
   Gamepad2,
+  TrendingUp,
   Sparkles,
-  ExternalLink
+  ArrowRight,
+  Code,
+  Check,
+  Disc,
+  Clock3,
+  ListPlus
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { TRACKS, getTrackWithRelations } from '../data/musicData';
+import { TRACKS, ARTISTS, getTrackWithRelations } from '../data/musicData';
 
 export default function DiscoverView({ globalSearchTerm = '' }) {
+  const navigate = useNavigate();
   const {
     currentTrack,
     isPlaying,
@@ -25,302 +28,432 @@ export default function DiscoverView({ globalSearchTerm = '' }) {
     togglePlay,
     listeningHistory,
     toggleLikeTrack,
-    playlists,
-    addTrackToPlaylist,
-    navigateToArtist,
     setShowVideoModal,
-    setActiveTab,
-    setCurrentTrack
+    setCurrentTrack,
+    tracksList,
+    artistsList,
+    playlists,
+    playlistTracks,
+    addTrackToPlaylist
   } = useApp();
 
   const [selectedGenre, setSelectedGenre] = useState('ALL');
-  const [selectedType, setSelectedType] = useState('ALL');
-  const [viewStyle, setViewStyle] = useState('grid'); // 'grid' | 'list'
-  const [playlistMenuTrackId, setPlaylistMenuTrackId] = useState(null);
+  const [copiedTrackId, setCopiedTrackId] = useState(null);
+  const [activeDropdownTrackId, setActiveDropdownTrackId] = useState(null);
+  const [displayLimit, setDisplayLimit] = useState(30);
 
-  const genres = ['ALL', 'Synthwave', 'Chillwave', 'Synthpop', 'Cyberpunk', 'Dark Electronic', 'French House'];
-  const trackTypes = ['ALL', 'official', 'video', 'indie', 'remix'];
+  useEffect(() => {
+    const handleClickOutside = () => setActiveDropdownTrackId(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
 
-  // Filter tracks
-  const filtered = TRACKS.map(t => getTrackWithRelations(t.track_id)).filter(t => {
-    const matchesGenre = selectedGenre === 'ALL' || t.genre.toLowerCase() === selectedGenre.toLowerCase();
-    const matchesType = selectedType === 'ALL' || t.track_type.toLowerCase() === selectedType.toLowerCase();
-    const query = globalSearchTerm.toLowerCase();
-    const matchesSearch =
-      !query ||
-      t.title.toLowerCase().includes(query) ||
-      t.artist?.name.toLowerCase().includes(query) ||
-      t.genre.toLowerCase().includes(query);
-    return matchesGenre && matchesType && matchesSearch;
-  });
+  const genres = [
+    'ALL',
+    'Electronic music',
+    'Synthwave',
+    'Hip hop music',
+    'Pop music',
+    'Independent music'
+  ];
+
+  const allArtists = (artistsList && artistsList.length > 0) ? artistsList : ARTISTS;
+  const activeTracks = (tracksList && tracksList.length > 0) ? tracksList : TRACKS;
+
+  // Spotlight Track (Nightcall or first track)
+  const spotlightTrack = getTrackWithRelations(1) || (activeTracks[0] ? getTrackWithRelations(activeTracks[0].track_id) || activeTracks[0] : TRACKS[0]);
+
+  // Filter tracks safely
+  const filtered = activeTracks
+    .map(t => getTrackWithRelations(t.track_id) || t)
+    .filter(t => {
+      if (!t) return false;
+      const trackGenre = t.genre || 'Electronic';
+      const matchesGenre = selectedGenre === 'ALL' || trackGenre.toLowerCase() === selectedGenre.toLowerCase();
+      const query = (globalSearchTerm || '').toLowerCase().trim();
+      const matchesSearch =
+        !query ||
+        (t.title || '').toLowerCase().includes(query) ||
+        (t.artist?.name || t.artist_name || '').toLowerCase().includes(query) ||
+        trackGenre.toLowerCase().includes(query);
+      return matchesGenre && matchesSearch;
+    });
+
+  // Top 6 Quick Picks for Spotify-style top grid
+  const quickPicks = filtered.slice(0, 6);
+
+  const formatDuration = (sec) => {
+    if (!sec || isNaN(sec)) return '3:30';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
 
   return (
-    <div className="discover-view">
-      {/* Hero Discovery Banner */}
-      <div className="discover-hero glass-panel">
-        <div className="discover-hero-content">
-          <span className="badge badge-cyan hero-tag">
-            <Compass size={14} /> AUDIO REPOSITORY
-          </span>
-          <h1 className="hero-title">Explore Audio Tracks &amp; Remix Lineage</h1>
-          <p className="hero-sub">
-            Listen to synthesizer stems, trace cover/remix relationships via parent track keys, or launch directly into the Heardle guessing arena.
+    <motion.div
+      className="spotify-discover-page"
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: 'easeOut' }}
+    >
+      {/* 1. TOP SPOTLIGHT HERO BANNER (Spotify Canvas Style) */}
+      <section className="spotify-spotlight-hero">
+        <div
+          className="hero-ambient-backdrop"
+          style={{
+            backgroundImage: `url(${spotlightTrack.custom_thumbnail_url || (spotlightTrack.yt_video_id ? `https://img.youtube.com/vi/${spotlightTrack.yt_video_id}/maxresdefault.jpg` : spotlightTrack.album?.cover_art_url)})`
+          }}
+        ></div>
+        <div className="hero-dark-overlay"></div>
+
+        <div className="hero-inner-content">
+          <div className="hero-badge-row">
+            <span className="hero-pill-tag">
+              <Sparkles size={13} /> EDITORIAL PICK
+            </span>
+            <span className="hero-genre-tag">{spotlightTrack.genre || 'Electronic'}</span>
+          </div>
+
+          <h1 className="hero-track-title">{spotlightTrack.title}</h1>
+          <p className="hero-artist-meta">
+            By{' '}
+            <strong
+              className="hero-artist-clickable"
+              onClick={() => navigate(`/artist/${spotlightTrack.artist_id}`)}
+            >
+              {spotlightTrack.artist?.name || spotlightTrack.artist_name || 'Featured Artist'}
+            </strong>{' '}
+            • <span>{spotlightTrack.album?.title || 'Single'}</span> ({spotlightTrack.album?.release_year || '2024'})
           </p>
-        </div>
-      </div>
 
-      {/* Filter and Control Bar */}
-      <div className="filter-bar glass-panel">
-        <div className="filter-group">
-          <span className="filter-label">Genre:</span>
-          <div className="filter-chips">
-            {genres.map(g => (
-              <button
-                key={g}
-                className={`filter-chip ${selectedGenre === g ? 'active' : ''}`}
-                onClick={() => setSelectedGenre(g)}
-              >
-                {g}
-              </button>
-            ))}
+          <p className="hero-track-desc">
+            Stream the authentic master recording in loss-free audio. Experience iconic basslines, analog synthesizers, and atmosphere.
+          </p>
+
+          <div className="hero-actions-row">
+            <motion.button
+              className="btn-spotify-hero-play"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => {
+                if (currentTrack?.track_id === spotlightTrack.track_id && isPlaying) {
+                  togglePlay();
+                } else {
+                  playTrack(spotlightTrack.track_id);
+                }
+              }}
+            >
+              {currentTrack?.track_id === spotlightTrack.track_id && isPlaying ? (
+                <>
+                  <Pause size={18} fill="currentColor" /> Pause
+                </>
+              ) : (
+                <>
+                  <Play size={18} fill="currentColor" /> Play Spotlight
+                </>
+              )}
+            </motion.button>
+
+            <button
+              className="btn-spotify-hero-secondary"
+              onClick={() => {
+                setCurrentTrack(spotlightTrack);
+                setShowVideoModal(true);
+              }}
+            >
+              <Tv size={16} /> Watch Video
+            </button>
+
+            <button
+              className="btn-spotify-hero-arena"
+              onClick={() => navigate('/game')}
+            >
+              <Gamepad2 size={16} /> Heardle Arena <ArrowRight size={14} />
+            </button>
           </div>
         </div>
+      </section>
 
-        <div className="filter-group">
-          <span className="filter-label">Track Type:</span>
-          <div className="filter-chips">
-            {trackTypes.map(type => (
-              <button
-                key={type}
-                className={`filter-chip ${selectedType === type ? 'active' : ''}`}
-                onClick={() => setSelectedType(type)}
-              >
-                {type.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="view-toggle-group">
-          <button
-            className={`btn-view-toggle ${viewStyle === 'grid' ? 'active' : ''}`}
-            onClick={() => setViewStyle('grid')}
-            title="Grid view"
-          >
-            <Grid size={16} />
-          </button>
-          <button
-            className={`btn-view-toggle ${viewStyle === 'list' ? 'active' : ''}`}
-            onClick={() => setViewStyle('list')}
-            title="List view"
-          >
-            <List size={16} />
-          </button>
-        </div>
-      </div>
-
-      {/* Tracks Display: Grid or List */}
-      {viewStyle === 'grid' ? (
-        <div className="tracks-grid">
-          {filtered.map(track => {
-            const isThisPlaying = isPlaying && currentTrack?.track_id === track.track_id;
-            const isLiked = listeningHistory.some(h => h.track_id === track.track_id && h.is_liked);
+      {/* 2. SPOTIFY QUICK PICKS (2x3 Compact Grid) */}
+      <section className="spotify-shelf-section">
+        <h2 className="shelf-section-title">Quick Picks</h2>
+        <div className="spotify-quick-picks-grid">
+          {quickPicks.map((track) => {
+            const isThisPlaying = currentTrack?.track_id === track.track_id && isPlaying;
+            const thumb =
+              track.custom_thumbnail_url ||
+              (track.yt_video_id ? `https://img.youtube.com/vi/${track.yt_video_id}/mqdefault.jpg` : null) ||
+              track.album?.cover_art_url ||
+              'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500';
 
             return (
-              <div key={track.track_id} className="track-card glass-panel">
-                <div className="card-thumb-wrapper">
-                  <img
-                    src={track.album?.cover_art_url || track.artist?.avatar_url}
-                    alt={track.title}
-                    className="card-thumb"
-                  />
-                  <div className="card-overlay">
+              <motion.div
+                key={track.track_id}
+                className={`quick-pick-card group ${isThisPlaying ? 'is-active-pick' : ''}`}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  if (isThisPlaying) togglePlay();
+                  else playTrack(track.track_id);
+                }}
+              >
+                <img
+                  src={thumb}
+                  alt={track.title}
+                  className="quick-pick-thumb"
+                  onError={(e) => { e.currentTarget.src = track.album?.cover_art_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500'; }}
+                />
+                <div className="quick-pick-info">
+                  <span className="quick-pick-title">{track.title}</span>
+                  <span className="quick-pick-artist">{track.artist?.name || track.artist_name || 'Artist'}</span>
+                </div>
+                <div className="quick-pick-play-btn">
+                  {isThisPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* 3. FEATURED ARTISTS SHELF (Spotify Circular Cards) */}
+      <section className="spotify-shelf-section">
+        <div className="shelf-header-between">
+          <h2 className="shelf-section-title">Popular Artists</h2>
+          <button className="shelf-see-all-btn" onClick={() => navigate('/artist')}>
+            See all
+          </button>
+        </div>
+
+        <div className="spotify-artists-row">
+          {allArtists.slice(0, 7).map((artist) => (
+            <motion.div
+              key={artist.artist_id}
+              className="spotify-artist-card"
+              whileHover={{ y: -4 }}
+              onClick={() => navigate(`/artist/${artist.artist_id}`)}
+            >
+              <div className="artist-card-avatar-wrap">
+                <img
+                  src={artist.avatar_url || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400'}
+                  alt={artist.name}
+                  className="artist-card-avatar-img"
+                  onError={(e) => {
+                    e.target.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400';
+                  }}
+                />
+              </div>
+              <span className="artist-card-name">{artist.name}</span>
+              <span className="artist-card-role">Artist</span>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* 4. GENRE FILTER CHIPS */}
+      <section className="genre-filter-shelf">
+        <div className="genre-chips-scroll">
+          {genres.map((g) => (
+            <button
+              key={g}
+              className={`genre-chip-pill ${selectedGenre === g ? 'is-active-chip' : ''}`}
+              onClick={() => setSelectedGenre(g)}
+            >
+              {g}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* 5. TRENDING TRACKS TABLE (Spotify / YouTube Music Style) */}
+      <section className="spotify-shelf-section">
+        <div className="shelf-header-between">
+          <div>
+            <h2 className="shelf-section-title">Trending Tracks</h2>
+            <p className="shelf-section-desc">Stream authentic audio directly in high fidelity</p>
+          </div>
+          <span className="tracks-count-pill font-mono">{filtered.length} Tracks</span>
+        </div>
+
+        <div className="spotify-tracks-table">
+          {/* Table Header */}
+          <div className="table-header-row font-mono">
+            <span className="th-num">#</span>
+            <span className="th-title">TITLE</span>
+            <span className="th-album hide-mobile">ALBUM</span>
+            <span className="th-genre hide-tablet">GENRE</span>
+            <span className="th-duration"><Clock3 size={14} /></span>
+            <span className="th-actions"></span>
+          </div>
+
+          {/* Table Rows */}
+          <div className="table-rows-container">
+            {filtered.slice(0, displayLimit).map((track, idx) => {
+              const isThisPlaying = currentTrack?.track_id === track.track_id && isPlaying;
+              const isCurrent = currentTrack?.track_id === track.track_id;
+              const isLiked = listeningHistory.some((h) => h.track_id === track.track_id && h.is_liked);
+              const thumb =
+                track.custom_thumbnail_url ||
+                (track.yt_video_id ? `https://img.youtube.com/vi/${track.yt_video_id}/mqdefault.jpg` : null) ||
+                track.album?.cover_art_url ||
+                'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500';
+
+              return (
+                <div
+                  key={track.track_id}
+                  className={`spotify-track-row ${isCurrent ? 'is-current-track' : ''}`}
+                  onClick={() => playTrack(track.track_id)}
+                >
+                  {/* # Column / Play button */}
+                  <div className="td-num">
+                    <span className="track-index-num font-mono">{idx + 1}</span>
                     <button
-                      className="btn-card-play"
-                      onClick={() => {
+                      className="track-hover-play-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (isThisPlaying) togglePlay();
                         else playTrack(track.track_id);
                       }}
                     >
-                      {isThisPlaying ? <Pause size={20} /> : <Play size={20} className="play-icon-offset" />}
+                      {isThisPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
                     </button>
+                    {isThisPlaying && (
+                      <div className="playing-bars-anim">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </div>
+                    )}
                   </div>
-                  <span className="card-genre-pill">{track.genre}</span>
-                  {track.track_type === 'remix' && (
-                    <span className="card-remix-pill">REMIX</span>
-                  )}
-                </div>
 
-                <div className="card-details">
-                  <h3 className="card-title">{track.title}</h3>
-                  <p
-                    className="card-artist clickable-link"
-                    onClick={() => navigateToArtist(track.artist_id)}
-                  >
-                    {track.artist?.name}
-                  </p>
-
-                  {/* Self-FK parent track relationship display */}
-                  {track.parentTrack && (
-                    <div className="card-parent-lineage">
-                      <span>Derived from: </span>
-                      <strong>{track.parentTrack.title}</strong>
+                  {/* Title & Artist Thumbnail */}
+                  <div className="td-title">
+                    <img
+                      src={thumb}
+                      alt={track.title}
+                      className="track-table-thumb"
+                      onError={(e) => { e.currentTarget.src = track.album?.cover_art_url || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500'; }}
+                    />
+                    <div className="track-table-names">
+                      <span className={`track-primary-title ${isCurrent ? 'title-playing-red' : ''}`}>
+                        {track.title}
+                      </span>
+                      <span
+                        className="track-secondary-artist"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/artist/${track.artist_id}`);
+                        }}
+                      >
+                        {track.artist?.name || track.artist_name || 'Featured Artist'}
+                      </span>
                     </div>
-                  )}
+                  </div>
 
-                  <div className="card-actions-bar">
+                  {/* Album */}
+                  <div className="td-album hide-mobile">
+                    <span>{track.album?.title || track.album_title || 'Single'}</span>
+                  </div>
+
+                  {/* Genre */}
+                  <div className="td-genre hide-tablet">
+                    <span className="genre-sub-pill">{track.genre || 'Electronic'}</span>
+                  </div>
+
+                  {/* Duration */}
+                  <div className="td-duration font-mono">
+                    {formatDuration(track.duration_sec || 215)}
+                  </div>
+
+                  {/* Actions (Heart, Add to Playlist, Copy Iframe) */}
+                  <div className="td-actions" onClick={(e) => e.stopPropagation()}>
                     <button
-                      className={`btn-card-action ${isLiked ? 'liked' : ''}`}
+                      className={`row-heart-btn ${isLiked ? 'is-liked' : ''}`}
                       onClick={() => toggleLikeTrack(track.track_id)}
-                      title="Like song"
+                      title={isLiked ? 'Unlike' : 'Like'}
                     >
-                      <Heart size={16} fill={isLiked ? '#ec4899' : 'none'} color={isLiked ? '#ec4899' : 'currentColor'} />
+                      <Heart size={16} fill={isLiked ? '#dc2626' : 'none'} color={isLiked ? '#dc2626' : 'currentColor'} />
                     </button>
 
-                    <div className="dropdown-action-wrap">
+                    <div className="row-add-playlist-wrap">
                       <button
-                        className="btn-card-action"
-                        onClick={() =>
-                          setPlaylistMenuTrackId(
-                            playlistMenuTrackId === track.track_id ? null : track.track_id
-                          )
-                        }
-                        title="Add to playlist"
+                        className="row-add-playlist-btn"
+                        title="Add to Playlist"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveDropdownTrackId(prev => prev === track.track_id ? null : track.track_id);
+                        }}
                       >
-                        <Plus size={16} />
+                        <ListPlus size={16} />
                       </button>
 
-                      {playlistMenuTrackId === track.track_id && (
-                        <div className="mini-dropdown glass-panel">
-                          <p className="mini-drop-title">Add to Playlist:</p>
-                          {playlists.map(pl => (
-                            <button
-                              key={pl.playlist_id}
-                              className="mini-drop-item"
-                              onClick={() => {
-                                addTrackToPlaylist(pl.playlist_id, track.track_id);
-                                setPlaylistMenuTrackId(null);
-                                alert(`Added "${track.title}" to "${pl.title}"!`);
-                              }}
-                            >
-                              {pl.title}
-                            </button>
-                          ))}
+                      {activeDropdownTrackId === track.track_id && (
+                        <div className="playlist-quick-dropdown" onClick={(e) => e.stopPropagation()}>
+                          <div className="playlist-quick-title">ADD TO PLAYLIST</div>
+                          {(!playlists || playlists.length === 0) ? (
+                            <div style={{ padding: '8px 10px', fontSize: '0.78rem', color: '#a1a1aa' }}>
+                              No playlists created yet.
+                            </div>
+                          ) : (
+                            playlists.map((pl) => {
+                              const inPlaylist = (playlistTracks || []).some(
+                                pt => pt.playlist_id === pl.playlist_id && pt.track_id === track.track_id
+                              );
+                              return (
+                                <button
+                                  key={pl.playlist_id}
+                                  className="playlist-quick-item"
+                                  disabled={inPlaylist}
+                                  onClick={async () => {
+                                    await addTrackToPlaylist(pl.playlist_id, track.track_id);
+                                    setActiveDropdownTrackId(null);
+                                  }}
+                                >
+                                  <Disc size={13} />
+                                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {pl.title}
+                                  </span>
+                                  {inPlaylist && <Check size={13} color="#10b981" />}
+                                </button>
+                              );
+                            })
+                          )}
                         </div>
                       )}
                     </div>
 
                     <button
-                      className="btn-card-action"
+                      className="row-copy-btn"
+                      title="Copy YouTube <iframe> for this song"
                       onClick={() => {
-                        setCurrentTrack(track);
-                        setShowVideoModal(true);
+                        const code =
+                          track.iframe_code ||
+                          `<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/${track.yt_video_id}" title="${track.title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+                        navigator.clipboard.writeText(code);
+                        setCopiedTrackId(track.track_id);
+                        setTimeout(() => setCopiedTrackId(null), 2000);
                       }}
-                      title="Watch YT Video"
                     >
-                      <Tv size={16} />
+                      {copiedTrackId === track.track_id ? <Check size={14} color="#10b981" /> : <Code size={14} />}
                     </button>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        /* List View */
-        <div className="tracks-list glass-panel">
-          <table className="tracks-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Title &amp; Lineage</th>
-                <th>Artist</th>
-                <th>Album</th>
-                <th>Genre</th>
-                <th>Type</th>
-                <th>Duration</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((track, i) => {
-                const isThisPlaying = isPlaying && currentTrack?.track_id === track.track_id;
-                const isLiked = listeningHistory.some(h => h.track_id === track.track_id && h.is_liked);
+              );
+            })}
+          </div>
 
-                return (
-                  <tr key={track.track_id}>
-                    <td>
-                      <button
-                        className="btn-table-play"
-                        onClick={() => {
-                          if (isThisPlaying) togglePlay();
-                          else playTrack(track.track_id);
-                        }}
-                      >
-                        {isThisPlaying ? <Pause size={14} /> : <Play size={14} className="play-icon-offset" />}
-                      </button>
-                    </td>
-                    <td>
-                      <div className="table-track-cell">
-                        <img
-                          src={track.album?.cover_art_url || track.artist?.avatar_url}
-                          alt={track.title}
-                          className="table-thumb"
-                        />
-                        <div>
-                          <span className="table-title">{track.title}</span>
-                          {track.parentTrack && (
-                            <span className="table-remix-sub">
-                              Cover of: {track.parentTrack.title}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <span
-                        className="clickable-link"
-                        onClick={() => navigateToArtist(track.artist_id)}
-                      >
-                        {track.artist?.name}
-                      </span>
-                    </td>
-                    <td>{track.album?.title || 'Single'}</td>
-                    <td><span className="badge badge-purple">{track.genre}</span></td>
-                    <td><span className="badge badge-cyan">{track.track_type}</span></td>
-                    <td className="font-mono">
-                      {(() => {
-                        const sec = track.duration_sec || Math.floor((track.duration_ms || 0) / 1000);
-                        return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-                      })()}
-                    </td>
-                    <td>
-                      <div className="table-actions-cell">
-                        <button
-                          className={`btn-table-heart ${isLiked ? 'liked' : ''}`}
-                          onClick={() => toggleLikeTrack(track.track_id)}
-                        >
-                          <Heart size={14} fill={isLiked ? '#ec4899' : 'none'} color={isLiked ? '#ec4899' : 'currentColor'} />
-                        </button>
-                        <button
-                          className="btn-table-action"
-                          onClick={() => {
-                            setCurrentTrack(track);
-                            setShowVideoModal(true);
-                          }}
-                          title="Watch YT Video"
-                        >
-                          <Tv size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          {filtered.length > displayLimit && (
+            <div className="table-load-more-row">
+              <button
+                className="btn-load-more"
+                onClick={() => setDisplayLimit((prev) => prev + 30)}
+              >
+                Load More Tracks
+              </button>
+            </div>
+          )}
         </div>
-      )}
-    </div>
+      </section>
+    </motion.div>
   );
 }

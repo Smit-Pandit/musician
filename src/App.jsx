@@ -1,4 +1,5 @@
 import React, { useState, Component } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { useApp } from './context/AppContext';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -9,6 +10,7 @@ import VideoModal from './components/VideoModal';
 import SqlConsoleModal from './components/SqlConsoleModal';
 
 // Views
+import LandingView from './views/LandingView';
 import GameArenaView from './views/GameArenaView';
 import UserProfileView from './views/UserProfileView';
 import DiscoverView from './views/DiscoverView';
@@ -53,25 +55,19 @@ class ErrorBoundary extends Component {
 
 export default function App() {
   const {
-    activeTab,
     layoutMode,
-    currentPath,
     isSqlConsoleOpen,
     setIsSqlConsoleOpen
   } = useApp();
+  const location = useLocation();
   const [globalSearchTerm, setGlobalSearchTerm] = useState('');
 
-  const isAuthPage =
-    currentPath === '/login' ||
-    currentPath === '/register' ||
-    activeTab === 'login' ||
-    activeTab === 'register';
-
-  if (isAuthPage) {
+  // 1. Landing Page (Home with "Press to Enter" button)
+  if (location.pathname === '/') {
     return (
-      <div className={`app-shell layout-${layoutMode}`}>
+      <div className={`app-shell layout-${layoutMode} landing-shell`}>
         <ErrorBoundary>
-          <AuthView initialMode={currentPath === '/register' || activeTab === 'register' ? 'register' : 'login'} />
+          <LandingView />
         </ErrorBoundary>
         <DesignSwitcherModal />
         <SchemaModal />
@@ -83,31 +79,28 @@ export default function App() {
     );
   }
 
-  const renderActiveView = () => {
-    switch (activeTab) {
-      case 'game':
-        return <GameArenaView />;
-      case 'profile':
-        return <UserProfileView />;
-      case 'discover':
-        return <DiscoverView globalSearchTerm={globalSearchTerm} />;
-      case 'artist':
-        return <ArtistDetailView />;
-      case 'playlists':
-        return <PlaylistsView />;
-      case 'leaderboard':
-        return <LeaderboardView />;
-      case 'schema':
-        return <SchemaView />;
-      case 'login':
-        return <AuthView initialMode="login" />;
-      case 'register':
-        return <AuthView initialMode="register" />;
-      default:
-        return <GameArenaView />;
-    }
-  };
+  // 2. Auth Pages (/login and /register)
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
+  if (isAuthPage) {
+    return (
+      <div className={`app-shell layout-${layoutMode}`}>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/login" element={<AuthView initialMode="login" />} />
+            <Route path="/register" element={<AuthView initialMode="register" />} />
+          </Routes>
+        </ErrorBoundary>
+        <DesignSwitcherModal />
+        <SchemaModal />
+        <SqlConsoleModal
+          isOpen={isSqlConsoleOpen}
+          onClose={() => setIsSqlConsoleOpen(false)}
+        />
+      </div>
+    );
+  }
 
+  // 3. Main Streaming Application
   return (
     <div className={`app-shell layout-${layoutMode}`}>
       {/* Top Universal Navigation */}
@@ -118,18 +111,31 @@ export default function App() {
         {/* Sidebar (hidden in full-focus mode) */}
         {layoutMode !== 'full-focus' && <Sidebar />}
 
-        {/* Viewport Canvas */}
+        {/* Viewport Canvas with URL Routes */}
         <main className="app-content-viewport">
           <div className="viewport-inner">
             <ErrorBoundary>
-              {renderActiveView()}
+              <Routes>
+                <Route path="/discover" element={<DiscoverView globalSearchTerm={globalSearchTerm} />} />
+                <Route path="/stream" element={<DiscoverView globalSearchTerm={globalSearchTerm} />} />
+                <Route path="/game" element={<GameArenaView />} />
+                <Route path="/arena" element={<GameArenaView />} />
+                <Route path="/profile" element={<UserProfileView />} />
+                <Route path="/playlists" element={<PlaylistsView />} />
+                <Route path="/playlists/:id" element={<PlaylistsView />} />
+                <Route path="/artist" element={<ArtistDetailView />} />
+                <Route path="/artist/:id" element={<ArtistDetailView />} />
+                <Route path="/leaderboard" element={<LeaderboardView />} />
+                <Route path="/schema" element={<SchemaView />} />
+                <Route path="*" element={<DiscoverView globalSearchTerm={globalSearchTerm} />} />
+              </Routes>
             </ErrorBoundary>
           </div>
         </main>
       </div>
 
-      {/* Persistent Bottom Audio Player Deck */}
-      <BottomPlayer />
+      {/* Persistent Bottom Audio Player Deck (Hidden in Audio Arena so no mystery track or answer is revealed) */}
+      {!location.pathname.startsWith('/game') && !location.pathname.startsWith('/arena') && <BottomPlayer />}
 
       {/* Modals & Studios */}
       <DesignSwitcherModal />

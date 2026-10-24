@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   CheckCircle,
   Play,
@@ -22,6 +23,8 @@ import {
 } from '../data/musicData';
 
 export default function ArtistDetailView() {
+  const { id } = useParams();
+  const navigate = useNavigate();
   const {
     selectedArtistId,
     setSelectedArtistId,
@@ -35,7 +38,8 @@ export default function ArtistDetailView() {
     setCurrentTrack
   } = useApp();
 
-  const artist = getArtistById(selectedArtistId) || ARTISTS[0];
+  const activeArtistId = id ? parseInt(id, 10) : selectedArtistId;
+  const artist = getArtistById(activeArtistId) || ARTISTS[0];
   const albums = ALBUMS.filter(a => a.artist_id === artist.artist_id);
   const tracks = TRACKS.filter(t => t.artist_id === artist.artist_id).map(t =>
     getTrackWithRelations(t.track_id)

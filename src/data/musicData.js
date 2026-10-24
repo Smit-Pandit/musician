@@ -1,4 +1,4 @@
-// ERD-Compliant Mock Database Engine for SONIX
+// ERD-Compliant Mock Database Engine for MUSICIANS
 // Updated to adhere 1:1 to the revised SQL Relational Schema diagram
 
 export const USERS = [
@@ -261,7 +261,7 @@ export const TRACKS = [
     parent_track_id: null,
     title: "Vampires",
     genre: "Synthwave",
-    yt_video_id: "t4L_z3j3s_s",
+    yt_video_id: "NEcWmZKSid4",
     track_type: "music_video",
     duration_sec: 317,
     snippet_start_sec: 40.00,
@@ -324,7 +324,7 @@ export const TRACKS = [
     parent_track_id: null,
     title: "Cameo (feat. Kareen Guy)",
     genre: "French House",
-    yt_video_id: "g7A2PqjK6_Q",
+    yt_video_id: "JrwnyTFXV_4",
     track_type: "live_cover",
     duration_sec: 254,
     snippet_start_sec: 36.00,
@@ -478,21 +478,42 @@ export const GAME_ATTEMPTS = [
 
 // Helper functions for joining relational data
 export function getArtistById(artistId) {
-  return ARTISTS.find(a => a.artist_id === artistId);
+  const id = parseInt(artistId, 10);
+  return ARTISTS.find(a => a.artist_id === id);
 }
 
 export function getAlbumById(albumId) {
-  return ALBUMS.find(a => a.album_id === albumId);
+  if (!albumId) return null;
+  const id = parseInt(albumId, 10);
+  return ALBUMS.find(a => a.album_id === id);
 }
 
 export function getTrackWithRelations(trackId) {
-  const track = TRACKS.find(t => t.track_id === trackId);
+  const id = parseInt(trackId, 10);
+  const track = TRACKS.find(t => t.track_id === id);
   if (!track) return null;
-  const artist = getArtistById(track.artist_id);
-  const album = getAlbumById(track.album_id);
-  const parentTrack = track.parent_track_id ? TRACKS.find(t => t.track_id === track.parent_track_id) : null;
+  const rawArtist = getArtistById(track.artist_id);
+  const fallbackThumb = track.custom_thumbnail_url || (track.yt_video_id ? `https://img.youtube.com/vi/${track.yt_video_id}/mqdefault.jpg` : null) || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400';
+  const artist = {
+    artist_id: track.artist_id,
+    name: rawArtist?.name || track.artist_name || 'Artist',
+    avatar_url: rawArtist?.avatar_url || track.artist_avatar || fallbackThumb
+  };
+  const album = getAlbumById(track.album_id) || {
+    album_id: track.album_id || 1,
+    title: track.album_title || 'Single',
+    cover_art_url: track.album_cover || track.custom_thumbnail_url || fallbackThumb
+  };
+  const parentTrack = track.parent_track_id ? TRACKS.find(t => t.track_id === parseInt(track.parent_track_id, 10)) : null;
+  const videoId = track.yt_video_id || '';
+  const embedUrl = track.embed_url || `https://www.youtube-nocookie.com/embed/${videoId}`;
+  const iframeCode = track.iframe_code || `<iframe width="560" height="315" src="${embedUrl}" title="${track.title} - ${artist.name}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>`;
+
   return {
     ...track,
+    embed_url: embedUrl,
+    iframe: iframeCode,
+    iframe_code: iframeCode,
     artist,
     album,
     parentTrack
@@ -500,19 +521,52 @@ export function getTrackWithRelations(trackId) {
 }
 
 export function getFullPlaylist(playlistId) {
-  const playlist = PLAYLISTS.find(p => p.playlist_id === playlistId);
+  const id = parseInt(playlistId, 10);
+  const playlist = PLAYLISTS.find(p => p.playlist_id === id);
   if (!playlist) return null;
   const playlistTracks = PLAYLIST_TRACKS
-    .filter(pt => pt.playlist_id === playlistId)
+    .filter(pt => pt.playlist_id === id)
     .sort((a, b) => a.position_order - b.position_order)
-    .map(pt => ({
-      ...pt,
-      track: getTrackWithRelations(pt.track_id)
-    }));
-  const user = USERS.find(u => u.user_id === playlist.user_id);
+    .map(pt => {
+      const fullTrack = pt.track || getTrackWithRelations(pt.track_id) || TRACKS.find(t => t.track_id === pt.track_id);
+      return {
+        ...pt,
+        track: fullTrack
+      };
+    });
+  const user = USERS.find(u => u.user_id === playlist.user_id) || { username: playlist.username || 'Alex_Synthwave' };
   return {
     ...playlist,
     user,
     tracks: playlistTracks
   };
 }
+
+// Dynamic synchronization function to load real data from MySQL InnoDB backend
+export function updateGlobalDatabaseData({ tracks, artists, albums, users, playlists, playlist_tracks }) {
+  if (Array.isArray(tracks) && tracks.length > 0) {
+    TRACKS.length = 0;
+    TRACKS.push(...tracks);
+  }
+  if (Array.isArray(artists) && artists.length > 0) {
+    ARTISTS.length = 0;
+    ARTISTS.push(...artists);
+  }
+  if (Array.isArray(albums) && albums.length > 0) {
+    ALBUMS.length = 0;
+    ALBUMS.push(...albums);
+  }
+  if (Array.isArray(users) && users.length > 0) {
+    USERS.length = 0;
+    USERS.push(...users);
+  }
+  if (Array.isArray(playlists) && playlists.length > 0) {
+    PLAYLISTS.length = 0;
+    PLAYLISTS.push(...playlists);
+  }
+  if (Array.isArray(playlist_tracks) && playlist_tracks.length > 0) {
+    PLAYLIST_TRACKS.length = 0;
+    PLAYLIST_TRACKS.push(...playlist_tracks);
+  }
+}
+

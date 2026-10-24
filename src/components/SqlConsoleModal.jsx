@@ -11,38 +11,112 @@ import {
   Code,
   FileText,
   Trash2,
-  RefreshCw
+  RefreshCw,
+  Server,
+  AlertTriangle,
+  HardDrive,
+  Cpu,
+  Key
 } from 'lucide-react';
-import { sqlApi, sqlQueryLog, subscribeToSqlLog } from '../services/sqlApi';
+import { sqlApi, sqlQueryLog, subscribeToSqlLog, subscribeToMySqlStatus } from '../services/sqlApi';
 
 export default function SqlConsoleModal({ isOpen, onClose }) {
   const [logs, setLogs] = useState(() => [...sqlQueryLog]);
-  const [rawQuery, setRawQuery] = useState('SELECT * FROM tracks WHERE is_embeddable = 1;');
+  const [rawQuery, setRawQuery] = useState('SELECT track_id, title, genre, yt_video_id, duration_sec, is_embeddable FROM tracks LIMIT 10;');
   const [queryResult, setQueryResult] = useState(null);
-  const [activeTab, setActiveTab] = useState('stream'); // 'stream' | 'query' | 'ddl'
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [activeTab, setActiveTab] = useState('innodb'); // Default to innodb status tab!
+
+  // MySQL Status & Config State
+  const [mySql, setMySql] = useState({ connected: false });
+  const [configForm, setConfigForm] = useState({
+    host: 'localhost',
+    port: 3306,
+    user: 'root',
+    password: '',
+    database: 'music_game_db'
+  });
+  const [configStatus, setConfigStatus] = useState(null);
+  const [isSeeding, setIsSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = subscribeToSqlLog(() => {
+    const unsubLog = subscribeToSqlLog(() => {
       setLogs([...sqlQueryLog]);
     });
-    return unsubscribe;
+    const unsubStatus = subscribeToMySqlStatus(status => {
+      setMySql(status);
+      if (status.config) {
+        setConfigForm(prev => ({
+          ...prev,
+          host: status.config.host || prev.host,
+          port: status.config.port || prev.port,
+          user: status.config.user || prev.user,
+          database: status.database || status.config.database || prev.database
+        }));
+      }
+    });
+    return () => {
+      unsubLog();
+      unsubStatus();
+    };
   }, []);
 
   if (!isOpen) return null;
 
-  const handleRunQuery = (e) => {
+  const handleRunQuery = async (e) => {
     e?.preventDefault();
     if (!rawQuery.trim()) return;
-    const res = sqlApi.executeRawQuery(rawQuery.trim());
-    setQueryResult(res);
+    setIsExecuting(true);
+    try {
+      const res = await sqlApi.executeRawQuery(rawQuery.trim());
+      setQueryResult(res);
+    } catch (err) {
+      setQueryResult({ success: false, error: err.message });
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  const handleRefreshStatus = async () => {
+    await sqlApi.checkBackendStatus();
+  };
+
+  const handleUpdateConfig = async (e) => {
+    e.preventDefault();
+    setConfigStatus({ loading: true, message: 'Connecting to MySQL InnoDB...' });
+    const res = await sqlApi.updateDbCredentials(configForm);
+    if (res.success) {
+      setConfigStatus({ type: 'success', message: `Connected to ${res.database || configForm.database} successfully!` });
+    } else {
+      setConfigStatus({ type: 'error', message: res.error || 'Connection failed' });
+    }
+  };
+
+  const handleSeedDatabase = async () => {
+    setIsSeeding(true);
+    setSeedResult(null);
+    try {
+      const res = await sqlApi.initializeDatabase();
+      if (res.success) {
+        setSeedResult({ type: 'success', message: res.message || 'Database seeded successfully!' });
+      } else {
+        setSeedResult({ type: 'error', message: res.error || 'Seeding failed' });
+      }
+    } catch (e) {
+      setSeedResult({ type: 'error', message: e.message });
+    } finally {
+      setIsSeeding(false);
+    }
   };
 
   const sampleQueries = [
-    'SELECT * FROM users ORDER BY total_xp DESC;',
-    'SELECT * FROM tracks WHERE genre = "Synthwave";',
+    'SELECT track_id, title, genre, yt_video_id, duration_sec FROM tracks;',
+    'SELECT user_id, username, email, total_xp FROM users ORDER BY total_xp DESC;',
+    'SELECT a.name, COUNT(t.track_id) AS track_count FROM artists a LEFT JOIN tracks t ON a.artist_id = t.artist_id GROUP BY a.artist_id;',
+    'SELECT * FROM game_sessions ORDER BY played_at DESC LIMIT 5;',
     'SELECT * FROM game_attempts WHERE is_correct = 1;',
-    'SELECT * FROM playlists WHERE is_public = 1;',
-    'SELECT * FROM listening_history ORDER BY played_at DESC;'
+    'SHOW TABLES;'
   ];
 
   return (
@@ -51,13 +125,28 @@ export default function SqlConsoleModal({ isOpen, onClose }) {
         {/* Header */}
         <div className="modal-header">
           <div className="modal-title-box">
-            <div className="modal-icon-badge sql-badge-icon">
-              <Terminal size={20} />
+            <div className={`modal-icon-badge ${mySql.connected ? 'innodb-badge-active' : 'sql-badge-icon'}`}>
+              {mySql.connected ? <Server size={22} /> : <Terminal size={22} />}
             </div>
             <div>
-              <h2 className="modal-title">Live SQL Engine &amp; Endpoint Console</h2>
+              <div className="modal-title-row">
+                <h2 className="modal-title">Relational SQL Engine &amp; InnoDB Console</h2>
+                {mySql.connected ? (
+                  <span className="pill-badge pill-innodb-online">
+                    <span className="pulse-dot-green"></span>
+                    MySQL InnoDB Live
+                  </span>
+                ) : (
+                  <span className="pill-badge pill-innodb-offline">
+                    <span className="pulse-dot-amber"></span>
+                    In-Memory Relational
+                  </span>
+                )}
+              </div>
               <p className="modal-sub">
-                Every API call executes real SQL queries mapped to the updated ER diagram
+                {mySql.connected
+                  ? `Connected to local InnoDB on port ${mySql.config?.port || 3306} • Database: ${mySql.database}`
+                  : 'Backend API server on port 5000 running in-memory fallback. Connect MySQL to stream live queries.'}
               </p>
             </div>
           </div>
@@ -70,6 +159,14 @@ export default function SqlConsoleModal({ isOpen, onClose }) {
 
         {/* Tab navigation */}
         <div className="sql-tabs-bar">
+          <button
+            className={`sql-tab ${activeTab === 'innodb' ? 'active' : ''}`}
+            onClick={() => setActiveTab('innodb')}
+          >
+            <Server size={15} />
+            <span>MySQL InnoDB Status</span>
+            {mySql.connected && <span className="tab-live-indicator">LIVE</span>}
+          </button>
           <button
             className={`sql-tab ${activeTab === 'stream' ? 'active' : ''}`}
             onClick={() => setActiveTab('stream')}
@@ -90,18 +187,201 @@ export default function SqlConsoleModal({ isOpen, onClose }) {
             onClick={() => setActiveTab('ddl')}
           >
             <FileText size={15} />
-            <span>schema.sql (DDL &amp; Triggers)</span>
+            <span>MySQL InnoDB DDL</span>
           </button>
         </div>
 
         {/* Modal Body */}
         <div className="sql-console-body">
-          {/* TAB 1: LIVE QUERY STREAM */}
+          {/* TAB 1: MYSQL INNODB STATUS */}
+          {activeTab === 'innodb' && (
+            <div className="sql-innodb-view">
+              {/* Health Banner */}
+              <div className={`innodb-status-card ${mySql.connected ? 'is-connected' : 'is-disconnected'}`}>
+                <div className="innodb-card-header">
+                  <div className="innodb-card-left">
+                    <div className="innodb-indicator-dot"></div>
+                    <div>
+                      <h3 className="innodb-card-title">
+                        {mySql.connected ? 'Local MySQL InnoDB Database Connected' : 'MySQL InnoDB Not Connected'}
+                      </h3>
+                      <p className="innodb-card-subtitle">
+                        {mySql.connected
+                          ? `ACID Compliant • Engine: ${mySql.engine} • Version: ${mySql.version || 'MySQL 8/MariaDB'} • Latency: ${mySql.latencyMs || 1}ms`
+                          : (mySql.error || 'Ensure MySQL is running on port 3306 and node server/server.js is started.')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="innodb-card-actions">
+                    <button className="btn-refresh-status" onClick={handleRefreshStatus} title="Refresh connection status">
+                      <RefreshCw size={14} /> Refresh
+                    </button>
+                  </div>
+                </div>
+
+                {/* Stat Metric Badges */}
+                <div className="innodb-metrics-row">
+                  <div className="metric-chip">
+                    <HardDrive size={14} className="metric-icon" />
+                    <span className="metric-label">Database:</span>
+                    <span className="metric-value font-mono">{mySql.database || 'music_game_db'}</span>
+                  </div>
+                  <div className="metric-chip">
+                    <Cpu size={14} className="metric-icon" />
+                    <span className="metric-label">Host:</span>
+                    <span className="metric-value font-mono">{mySql.config?.host || 'localhost'}:{mySql.config?.port || 3306}</span>
+                  </div>
+                  <div className="metric-chip">
+                    <Layers size={14} className="metric-icon" />
+                    <span className="metric-label">Engine:</span>
+                    <span className="metric-value font-mono">InnoDB</span>
+                  </div>
+                  <div className="metric-chip">
+                    <Clock size={14} className="metric-icon" />
+                    <span className="metric-label">Ping:</span>
+                    <span className="metric-value font-mono">{mySql.latencyMs || 1}ms</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Table Rows Breakdown */}
+              <div className="innodb-section">
+                <div className="section-title-row">
+                  <h4 className="section-title">
+                    <Layers size={16} /> Relational Tables in `{mySql.database || 'music_game_db'}`
+                  </h4>
+                  <button
+                    className="btn-seed-action"
+                    onClick={handleSeedDatabase}
+                    disabled={isSeeding}
+                  >
+                    <RefreshCw size={14} className={isSeeding ? 'spin-icon' : ''} />
+                    <span>{isSeeding ? 'Seeding...' : 'Run Seed Script'}</span>
+                  </button>
+                </div>
+
+                {seedResult && (
+                  <div className={`seed-feedback-banner ${seedResult.type}`}>
+                    {seedResult.message}
+                  </div>
+                )}
+
+                <div className="innodb-tables-grid">
+                  {(mySql.stats?.tables && mySql.stats.tables.length > 0 ? mySql.stats.tables : [
+                    { name: 'artists', engine: 'InnoDB', rowCount: 5 },
+                    { name: 'albums', engine: 'InnoDB', rowCount: 7 },
+                    { name: 'tracks', engine: 'InnoDB', rowCount: 8 },
+                    { name: 'users', engine: 'InnoDB', rowCount: 3 },
+                    { name: 'playlists', engine: 'InnoDB', rowCount: 3 },
+                    { name: 'playlist_tracks', engine: 'InnoDB', rowCount: 8 },
+                    { name: 'listening_history', engine: 'InnoDB', rowCount: 4 },
+                    { name: 'game_sessions', engine: 'InnoDB', rowCount: 3 },
+                    { name: 'game_attempts', engine: 'InnoDB', rowCount: 3 }
+                  ]).map((t, idx) => (
+                    <div key={idx} className="table-stat-card glass-panel">
+                      <div className="table-stat-header">
+                        <span className="table-stat-name font-mono">{t.name}</span>
+                        <span className="table-stat-engine">{t.engine || 'InnoDB'}</span>
+                      </div>
+                      <div className="table-stat-rows">
+                        <span className="table-count-number">{t.rowCount ?? 0}</span>
+                        <span className="table-count-label">rows</span>
+                      </div>
+                      <div className="table-stat-footer">
+                        <button
+                          className="table-peek-btn font-mono"
+                          onClick={() => {
+                            setRawQuery(`SELECT * FROM ${t.name} LIMIT 10;`);
+                            setActiveTab('query');
+                          }}
+                        >
+                          SELECT *
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* MySQL Credentials Form */}
+              <div className="innodb-config-box glass-panel">
+                <h4 className="config-box-title">
+                  <Key size={16} /> Configure MySQL / MariaDB Connection
+                </h4>
+                <p className="config-box-subtitle">
+                  Update database credentials dynamically without restarting the server:
+                </p>
+                <form onSubmit={handleUpdateConfig} className="innodb-config-form">
+                  <div className="form-grid-3">
+                    <div className="config-field">
+                      <label>Host</label>
+                      <input
+                        type="text"
+                        value={configForm.host}
+                        onChange={e => setConfigForm({ ...configForm, host: e.target.value })}
+                        placeholder="localhost"
+                      />
+                    </div>
+                    <div className="config-field">
+                      <label>Port</label>
+                      <input
+                        type="number"
+                        value={configForm.port}
+                        onChange={e => setConfigForm({ ...configForm, port: parseInt(e.target.value, 10) || 3306 })}
+                        placeholder="3306"
+                      />
+                    </div>
+                    <div className="config-field">
+                      <label>Database</label>
+                      <input
+                        type="text"
+                        value={configForm.database}
+                        onChange={e => setConfigForm({ ...configForm, database: e.target.value })}
+                        placeholder="music_game_db"
+                      />
+                    </div>
+                  </div>
+                  <div className="form-grid-2">
+                    <div className="config-field">
+                      <label>User</label>
+                      <input
+                        type="text"
+                        value={configForm.user}
+                        onChange={e => setConfigForm({ ...configForm, user: e.target.value })}
+                        placeholder="root"
+                      />
+                    </div>
+                    <div className="config-field">
+                      <label>Password</label>
+                      <input
+                        type="password"
+                        value={configForm.password}
+                        onChange={e => setConfigForm({ ...configForm, password: e.target.value })}
+                        placeholder="(Empty for default XAMPP/local)"
+                      />
+                    </div>
+                  </div>
+                  <div className="config-submit-row">
+                    <button type="submit" className="btn-primary btn-save-config">
+                      Test &amp; Connect to InnoDB
+                    </button>
+                    {configStatus && (
+                      <span className={`config-status-msg ${configStatus.type}`}>
+                        {configStatus.message}
+                      </span>
+                    )}
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: LIVE QUERY STREAM */}
           {activeTab === 'stream' && (
             <div className="sql-stream-view">
               <div className="stream-header-row">
                 <span className="stream-caption">
-                  Active queries dispatched by user clicks, games, audio streams &amp; auth:
+                  Active SQL queries dispatched by frontend user actions, audio streams, games &amp; auth:
                 </span>
                 <button
                   className="btn-clear-logs"
@@ -126,6 +406,11 @@ export default function SqlConsoleModal({ isOpen, onClose }) {
                         <span className={`sql-verb-tag verb-${log.sql.split(' ')[0].toLowerCase()}`}>
                           {log.sql.split(' ')[0]}
                         </span>
+                        {log.isRealMysql && (
+                          <span className="innodb-tag font-mono">
+                            ⚡ InnoDB Live
+                          </span>
+                        )}
                         <span className="log-time font-mono">{log.timestamp}</span>
                         <span className="log-latency font-mono">
                           <Clock size={11} /> {log.executionTimeMs}ms
@@ -147,7 +432,7 @@ export default function SqlConsoleModal({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* TAB 2: INTERACTIVE SQL PLAYGROUND */}
+          {/* TAB 3: INTERACTIVE SQL PLAYGROUND */}
           {activeTab === 'query' && (
             <div className="sql-playground-view">
               <div className="sample-queries-strip">
@@ -174,8 +459,8 @@ export default function SqlConsoleModal({ isOpen, onClose }) {
                     onChange={e => setRawQuery(e.target.value)}
                     placeholder="Enter SQL Query (e.g. SELECT * FROM tracks;)"
                   />
-                  <button type="submit" className="btn-run-sql btn-primary">
-                    <Play size={15} /> Execute SQL
+                  <button type="submit" className="btn-run-sql btn-primary" disabled={isExecuting}>
+                    <Play size={15} /> {isExecuting ? 'Running...' : 'Execute on InnoDB'}
                   </button>
                 </div>
               </form>
@@ -184,106 +469,129 @@ export default function SqlConsoleModal({ isOpen, onClose }) {
                 <div className="query-result-box glass-panel">
                   <div className="result-header">
                     <span className="result-count font-mono">
-                      Returned {queryResult.count} row{queryResult.count !== 1 ? 's' : ''}
+                      {queryResult.success ? (
+                        <>Returned {queryResult.count} row{queryResult.count !== 1 ? 's' : ''} {queryResult.isRealMysql ? '(via MySQL InnoDB)' : '(in-memory)'}</>
+                      ) : (
+                        <span className="error-text">Execution Error</span>
+                      )}
                     </span>
                   </div>
                   <div className="result-table-scroll">
-                    <pre className="result-json font-mono">
-                      {JSON.stringify(queryResult.rows, null, 2)}
-                    </pre>
+                    {queryResult.success ? (
+                      <pre className="result-json font-mono">
+                        {JSON.stringify(queryResult.rows, null, 2)}
+                      </pre>
+                    ) : (
+                      <div className="result-error-box font-mono">
+                        {queryResult.error}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* TAB 3: DDL & TRIGGERS */}
+          {/* TAB 4: MYSQL INNODB DDL & TRIGGERS */}
           {activeTab === 'ddl' && (
             <div className="sql-ddl-view">
               <div className="ddl-info-row">
-                <span className="badge badge-purple">database/schema.sql</span>
+                <span className="badge badge-purple">database/schema.sql (MySQL InnoDB)</span>
                 <span className="ddl-caption">
-                  Full production-ready SQL DDL with Foreign Keys, Check Constraints &amp; Trigger Derivations
+                  Native MySQL / MariaDB InnoDB DDL with ENGINE=InnoDB, Foreign Keys, Check Constraints &amp; Triggers
                 </span>
               </div>
               <pre className="ddl-code-pre font-mono">
-{`-- 1. ARTISTS (avatar_url, verified_status, optional yt_channel_id)
+{`-- 1. ARTISTS TABLE
 CREATE TABLE artists (
-    artist_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    artist_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    yt_channel_id VARCHAR(100) UNIQUE,
-    verified_status BOOLEAN NOT NULL DEFAULT 0,
+    yt_channel_id VARCHAR(100) UNIQUE DEFAULT NULL,
+    verified_status BOOLEAN NOT NULL DEFAULT FALSE,
     avatar_url TEXT NOT NULL
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 2. ALBUMS (album_type in album, ep, single)
+-- 2. ALBUMS TABLE
 CREATE TABLE albums (
-    album_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    artist_id INTEGER NOT NULL,
+    album_id INT AUTO_INCREMENT PRIMARY KEY,
+    artist_id INT NOT NULL,
     title VARCHAR(255) NOT NULL,
-    release_year INTEGER NOT NULL,
+    release_year INT NOT NULL,
     cover_art_url TEXT NOT NULL,
-    album_type VARCHAR(20) NOT NULL CHECK (album_type IN ('album', 'ep', 'single')),
+    album_type VARCHAR(20) NOT NULL,
+    CONSTRAINT chk_album_type CHECK (album_type IN ('album', 'ep', 'single')),
     FOREIGN KEY (artist_id) REFERENCES artists(artist_id) ON DELETE CASCADE
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 3. USERS (derived total_xp via trigger)
+-- 3. USERS TABLE
 CREATE TABLE users (
-    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
-    total_xp INTEGER NOT NULL DEFAULT 0,
+    total_xp INT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 4. TRACKS (duration_sec, snippet_start_sec, yt_video_id, parent_track_id)
+-- 4. TRACKS TABLE (Parent-lineage FK for covers/remixes)
 CREATE TABLE tracks (
-    track_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    artist_id INTEGER NOT NULL,
-    album_id INTEGER,
-    parent_track_id INTEGER,
+    track_id INT AUTO_INCREMENT PRIMARY KEY,
+    artist_id INT NOT NULL,
+    album_id INT DEFAULT NULL,
+    parent_track_id INT DEFAULT NULL,
     title VARCHAR(255) NOT NULL,
     genre VARCHAR(100) NOT NULL,
     yt_video_id VARCHAR(11) NOT NULL UNIQUE,
-    track_type VARCHAR(30) NOT NULL CHECK (track_type IN ('official_audio', 'music_video', 'remix', 'live_cover')),
-    duration_sec INTEGER NOT NULL,
+    track_type VARCHAR(30) NOT NULL,
+    duration_sec INT NOT NULL,
     snippet_start_sec DECIMAL(6, 2) NOT NULL DEFAULT 0.00,
-    custom_thumbnail_url TEXT,
-    is_embeddable BOOLEAN NOT NULL DEFAULT 1,
+    custom_thumbnail_url TEXT DEFAULT NULL,
+    is_embeddable BOOLEAN NOT NULL DEFAULT TRUE,
     FOREIGN KEY (artist_id) REFERENCES artists(artist_id) ON DELETE CASCADE,
     FOREIGN KEY (album_id) REFERENCES albums(album_id) ON DELETE SET NULL,
     FOREIGN KEY (parent_track_id) REFERENCES tracks(track_id) ON DELETE SET NULL
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 5. GAME_SESSIONS & 6. GAME_ATTEMPTS (unlocked_tier_sec 0.1, 1.0, 2.0, 5.0)
+-- 5. GAME_SESSIONS & 6. GAME_ATTEMPTS
 CREATE TABLE game_attempts (
-    attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id INTEGER NOT NULL,
-    track_id INTEGER NOT NULL,
-    unlocked_tier_sec DECIMAL(3, 1) NOT NULL CHECK (unlocked_tier_sec IN (0.1, 1.0, 2.0, 5.0)),
-    attempts_used INTEGER NOT NULL CHECK (attempts_used BETWEEN 1 AND 4),
-    is_correct BOOLEAN NOT NULL DEFAULT 0,
-    response_time_ms INTEGER NOT NULL DEFAULT 0,
-    points_awarded INTEGER NOT NULL CHECK (points_awarded IN (1000, 750, 500, 250, 0)),
+    attempt_id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id INT NOT NULL,
+    track_id INT NOT NULL,
+    unlocked_tier_sec DECIMAL(3, 1) NOT NULL,
+    attempts_used INT NOT NULL,
+    is_correct BOOLEAN NOT NULL DEFAULT FALSE,
+    response_time_ms INT NOT NULL DEFAULT 0,
+    points_awarded INT NOT NULL,
     FOREIGN KEY (session_id) REFERENCES game_sessions(session_id) ON DELETE CASCADE,
     FOREIGN KEY (track_id) REFERENCES tracks(track_id) ON DELETE CASCADE
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- TRIGGERS TO AUTO-UPDATE DERIVED FIELDS:
+-- INNODB TRIGGER FOR DERIVED TOTAL_SCORE:
+DELIMITER $$
 CREATE TRIGGER trg_after_insert_game_attempt_score
 AFTER INSERT ON game_attempts
+FOR EACH ROW
 BEGIN
     UPDATE game_sessions
-    SET total_score = (SELECT COALESCE(SUM(points_awarded), 0) FROM game_attempts WHERE session_id = NEW.session_id)
+    SET total_score = (
+        SELECT COALESCE(SUM(points_awarded), 0)
+        FROM game_attempts
+        WHERE session_id = NEW.session_id
+    )
     WHERE session_id = NEW.session_id;
-END;`}
+END$$
+DELIMITER ;`}
               </pre>
             </div>
           )}
         </div>
 
         <div className="modal-footer">
+          <div className="modal-footer-left">
+            <span className="innodb-engine-stamp">
+              Engine: <strong>InnoDB (ACID Compliant)</strong>
+            </span>
+          </div>
           <button className="btn-secondary" onClick={onClose}>
             Close Console
           </button>
